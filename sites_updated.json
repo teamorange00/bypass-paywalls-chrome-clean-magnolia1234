@@ -67,5 +67,37 @@
     ],
     "allow_cookies": 1,
     "block_regex": "(\\.tribdss\\.com\\/|\\.zephr\\.com\\/zephr-browser\\/.+\\/zephr-browser\\.umd\\.js)"
+  },
+  "Financial Times": {
+    "domain": "ft.com",
+    "allow_cookies": 1,
+    "useragent": "googlebot",
+    "referer": "https://www.google.com/",
+    "block_regex": "(cdn\\.ampproject\\.org\\/v\\d\\/amp-(access|ad|subscriptions)-.+\\.js|\\.ft\\.com\\/.+\\/(barrier|paywall|subscription|meter|zephr)\\.js|zephrBarriersScripts)",
+    "amp_redirect": {
+      "paywall": "#barrier-page, .subscription-prompt, [data-trackable=\"paywall\"]"
+    },
+    "cs_code": [
+      {
+        "cond": "#barrier-page",
+        "rm_elem": 1
+      },
+      {
+        "cond": ".barrier, .js-barrier, .js-article-barrier, [data-trackable=\"paywall\"]",
+        "rm_elem": 1
+      },
+      {
+        "cond": ".subscription-prompt, .js-subscription-prompt",
+        "rm_elem": 1
+      },
+      {
+        "cond": ".overlay, .paywall-overlay, [data-trackable=\"overlay\"]",
+        "rm_elem": 1
+      },
+      {
+        "cond": ".n-layout__row--content",
+        "rm_attrib": "style"
+      }
+    ]
   }
 }

@@ -152,6 +152,75 @@ if ((bg2csData !== undefined) && bg2csData.cs_code) {
   }, 1000); // Delay (in milliseconds)
 }
 
+// Financial Times university proxy link rewriting
+if (window.location.hostname.match(/www-ft-com\.(ezphost\.dur\.ac\.uk|ezproxy)|ft-com\.(ezp-prod1\.hul\.harvard\.edu|proxy\.lib\.umich\.edu)/)) {
+  console.log('BPC: FT University proxy detected, setting up link rewriting');
+  
+  // Force reload with Google referrer if we detect paywall and no Google referrer
+  if (!document.referrer.includes('google.com') && (document.querySelector('.subscribe-truncate, [data-trackable="paywall"], .subscription-prompt') || document.body.innerText.includes('Subscribe to unlock'))) {
+    console.log('BPC: Detected paywall without Google referrer, simulating Google search click');
+    
+    // Method 1: Try to navigate via Google search simulation
+    let currentUrl = window.location.href;
+    let searchQuery = encodeURIComponent('site:ft.com ' + document.title);
+    let googleUrl = `https://www.google.com/search?q=${searchQuery}`;
+    
+    // Method 2: Create an invisible iframe that loads Google, then navigate from it
+    let iframe = document.createElement('iframe');
+    iframe.src = googleUrl;
+    iframe.style.display = 'none';
+    iframe.style.width = '1px';
+    iframe.style.height = '1px';
+    document.body.appendChild(iframe);
+    
+    window.setTimeout(function() {
+      // Now navigate to the current page as if coming from the Google iframe
+      window.location.href = currentUrl;
+    }, 1500);
+    
+    return; // Exit early to avoid setting up other functionality
+  }
+  
+  function rewriteFTLinks() {
+    let currentProxyDomain = window.location.hostname;
+    let ftLinks = document.querySelectorAll('a[href*="ft.com"], a[href*="www.ft.com"], a[href^="/"]');
+    
+    for (let link of ftLinks) {
+      let originalHref = link.href;
+      
+      // Handle absolute ft.com links
+      if (originalHref.match(/https?:\/\/(www\.)?ft\.com/)) {
+        let newHref = originalHref.replace(/https?:\/\/(www\.)?ft\.com/, 'https://' + currentProxyDomain);
+        link.href = newHref;
+        console.log('BPC: Rewritten absolute link from', originalHref, 'to', newHref);
+      }
+      // Handle relative links that might escape the proxy
+      else if (link.getAttribute('href') && link.getAttribute('href').startsWith('/') && !originalHref.includes(currentProxyDomain)) {
+        let newHref = 'https://' + currentProxyDomain + link.getAttribute('href');
+        link.href = newHref;
+        console.log('BPC: Rewritten relative link from', originalHref, 'to', newHref);
+      }
+    }
+  }
+  
+  // Initial rewrite
+  window.setTimeout(rewriteFTLinks, 1000);
+  
+  // Rewrite links when new content loads
+  let observer = new MutationObserver(function(mutations) {
+    mutations.forEach(function(mutation) {
+      if (mutation.addedNodes.length > 0) {
+        window.setTimeout(rewriteFTLinks, 100);
+      }
+    });
+  });
+  
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+}
+
 // Content workarounds/domain
 
 if (matchDomain(['medium.com', 'towardsdatascience.com']) || document.querySelector('script[src^="https://cdn-client.medium.com/"]')) {
@@ -2353,10 +2422,68 @@ else if (matchDomain('ft.com')) {
   if (window.location.hostname.startsWith('amp.')) {
     amp_unhide_subscr_section('.ad-container, amp-ad');
   } else {
-    let cookie_banner = document.querySelector('.o-banner__outer');
-    let ribbon = document.querySelector('.js-article-ribbon');
-    let ads = document.querySelector('.o-ads');
-    removeDOMElement(cookie_banner, ribbon, ads);
+    // Check if we're already on a working proxy URL
+    let isProxyUrl = window.location.hostname.includes('ezphost') || 
+                     window.location.hostname.includes('ezp-prod') ||
+                     window.location.hostname.includes('ezproxy');
+    
+    if (!isProxyUrl) {
+      // Check if this is a paywall page
+      let paywall = document.querySelector('#barrier-page, .barrier, [data-trackable="paywall"]');
+      let subscriptionPrompt = document.querySelector('.subscription-prompt');
+      
+      if (paywall || subscriptionPrompt || document.body.textContent.includes('Subscribe to unlock')) {
+        console.log('FT paywall detected, attempting proxy redirect...');
+        
+        // Try redirecting to institutional proxy URLs
+        let currentUrl = window.location.href;
+        let proxyUrls = [
+          currentUrl.replace('www.ft.com', 'www-ft-com.ezphost.dur.ac.uk'),
+          currentUrl.replace('www.ft.com', 'www-ft-com.ezp-prod1.hul.harvard.edu'),
+          currentUrl.replace('www.ft.com', 'ft-com.proxy.lib.umich.edu')
+        ];
+        
+        // Try first proxy URL
+        console.log('Attempting redirect to:', proxyUrls[0]);
+        window.location.href = proxyUrls[0];
+        return;
+      }
+    }
+    
+    // Remove paywall elements if we're on the proxy or if paywall elements exist
+    let paywall = document.querySelector('.barrier, .js-barrier, .js-article-barrier, [data-trackable="paywall"]');
+    let subscription_prompt = document.querySelector('.subscription-prompt, .js-subscription-prompt');
+    let overlay = document.querySelector('.overlay, .paywall-overlay, [data-trackable="overlay"]');
+    let cookie_banner = document.querySelector('.o-banner__outer, .cookie-banner');
+    let ribbon = document.querySelector('.js-article-ribbon, .ribbon');
+    let ads = document.querySelectorAll('.o-ads, .ad-container, [data-trackable="ad"]');
+    
+    removeDOMElement(paywall, subscription_prompt, overlay, cookie_banner, ribbon, ...ads);
+    
+    // Show full article content
+    let article_body = document.querySelector('.article__content-body, .js-article-body, [data-trackable="article-body"]');
+    if (article_body) {
+      article_body.style.maxHeight = 'none';
+      article_body.style.overflow = 'visible';
+      article_body.classList.remove('article--truncated', 'js-article--truncated');
+    }
+    
+    // Remove blur/fade effects
+    let blurred_content = document.querySelectorAll('.article--blurred, .content--blurred, .fade-out');
+    for (let elem of blurred_content) {
+      elem.classList.remove('article--blurred', 'content--blurred', 'fade-out');
+      elem.style.filter = 'none';
+      elem.style.webkitFilter = 'none';
+    }
+    
+    // Clear localStorage that might track article views
+    if (window.localStorage) {
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('barrier') || key.includes('paywall') || key.includes('subscription') || key.includes('meter')) {
+          localStorage.removeItem(key);
+        }
+      });
+    }
   }
 }
 

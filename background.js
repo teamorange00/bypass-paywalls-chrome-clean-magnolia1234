@@ -120,21 +120,8 @@ function setDefaultOptions() {
 }
 
 function check_sites_updated() {
-  //var sites_updated_json = 'https://gitlab.com/magnolia1234/bypass-paywalls-' + url_loc + '-clean/-/raw/master/sites_updated.json';
-  var sites_updated_json = 'https://bitbucket.org/magnolia1234/bypass-paywalls-firefox-clean/raw/master/sites_updated.json';
-  fetch(sites_updated_json)
-  .then(response => {
-    if (response.ok) {
-      response.json().then(json => {
-        expandSiteRules(json, true);
-        ext_api.storage.local.set({
-          sites_updated: json
-        });
-      })
-    }
-  }).catch(function (err) {
-    false;
-  });
+  // External update check removed for security/privacy
+  // Sites will only use locally stored configuration
 }
 
 function set_rules(sites, sites_updated, sites_custom) {
@@ -338,10 +325,7 @@ ext_api.storage.local.get({
   disabledSites = defaultSites_domains.concat(customSites_domains).filter(x => !enabledSites.includes(x) && x !== '###');
   add_grouped_enabled_domains(grouped_sites);
   set_rules(sites, updatedSites, customSites);
-  if (enabledSites.includes('#options_optin_update_rules'))
-    check_sites_updated();
-  if (optin_update)
-    check_update();
+  // External update checks removed for security/privacy
 });
 
 // Listen for changes to options
@@ -660,13 +644,7 @@ if (ext_api.webRequest.OnBeforeSendHeadersOptions.hasOwnProperty('EXTRA_HEADERS'
   extraInfoSpec.push('extraHeaders');
 
 ext_api.webRequest.onBeforeSendHeaders.addListener(function(details) {
-  if (details.type === 'main_frame') {
-    let current_date_str = currentDateStr();
-    if (last_date_str < current_date_str) {
-      bpc_count_daily_users(current_date_str);
-      last_date_str = current_date_str;
-    }
-  }
+  // Daily user tracking removed for privacy
 
   var requestHeaders = details.requestHeaders;
 
@@ -868,14 +846,34 @@ ext_api.webRequest.onBeforeSendHeaders.addListener(function(details) {
     !(matchUrlDomain('theaustralian.com.au', details.url) && enabledSites.includes('#options_disable_gb_theaustralian')) &&
     !(matchUrlDomain('thetimes.co.uk', details.url) && !details.url.match(/\/epaper\.thetimes\.co\.uk\//)) &&
     !(matchUrlDomain('wsj.com', details.url) && enabledSites.includes('#options_disable_gb_wsj'));
+  
+  // Force Googlebot and Google referrer for Financial Times (including university proxies)
+  if (details.url.match(/(www\.)?ft\.com|www-ft-com\.ezphost\.dur\.ac\.uk|ft-com\.ezp-prod1\.hul\.harvard\.edu|ft-com\.proxy\.lib\.umich\.edu|www-ft-com\.ezproxy/)) {
+    console.log('BPC: Forcing Googlebot and Google referrer for FT URL:', details.url);
+    googlebotEnabled = true;
+    // Also ensure we're in the change_headers array for referrer modification
+    if (!matchUrlDomain(change_headers, details.url)) {
+      change_headers.push(details.url.match(/([^\/]+\.[^\/]+)/)[1]); // Add domain to change_headers
+    }
+  }
+  
   var bingbotEnabled = matchUrlDomain(use_bing_bot, details.url) && 
     !(matchUrlDomain('stratfor.com', details.url) && details.url.match(/(\/(\d){4}-([a-z]||-)+-forecast(-([a-z]|-)+)?|-forecast-(\d){4}-([a-z]|[0-9]||-)+)$/));
 
-if (matchUrlDomain(change_headers, details.url) && !['font', 'image', 'stylesheet'].includes(details.type)) {
+// Always force header changes for FT university proxy domains
+var isFTProxy = details.url.match(/www-ft-com\.ezphost\.dur\.ac\.uk|ft-com\.ezp-prod1\.hul\.harvard\.edu|ft-com\.proxy\.lib\.umich\.edu|www-ft-com\.ezproxy/);
+
+// Force Googlebot for FT proxy regardless of main logic
+if (isFTProxy) {
+  googlebotEnabled = true;
+  console.log('BPC: Force enabling Googlebot for FT proxy:', details.url);
+}
+
+if ((matchUrlDomain(change_headers, details.url) || isFTProxy) && !['font', 'image', 'stylesheet'].includes(details.type)) {
   // if referer exists, set it
   requestHeaders = requestHeaders.map(function (requestHeader) {
     if (requestHeader.name === 'Referer') {
-      if (googlebotEnabled || matchUrlDomain(use_google_referer, details.url)) {
+      if (googlebotEnabled || matchUrlDomain(use_google_referer, details.url) || details.url.match(/www-ft-com\.ezphost\.dur\.ac\.uk|ft-com\.ezp-prod1\.hul\.harvard\.edu|ft-com\.proxy\.lib\.umich\.edu|www-ft-com\.ezproxy/)) {
         requestHeader.value = 'https://www.google.com/';
       } else if (matchUrlDomain(use_facebook_referer, details.url)) {
         requestHeader.value = 'https://www.facebook.com/';
@@ -892,7 +890,7 @@ if (matchUrlDomain(change_headers, details.url) && !['font', 'image', 'styleshee
 
   // otherwise add it
   if (!setReferer) {
-    if (googlebotEnabled || matchUrlDomain(use_google_referer, details.url)) {
+    if (googlebotEnabled || matchUrlDomain(use_google_referer, details.url) || details.url.match(/www-ft-com\.ezphost\.dur\.ac\.uk|ft-com\.ezp-prod1\.hul\.harvard\.edu|ft-com\.proxy\.lib\.umich\.edu|www-ft-com\.ezproxy/)) {
       requestHeaders.push({
         name: 'Referer',
         value: 'https://www.google.com/'
@@ -1077,27 +1075,8 @@ function updateBadge(activeTab) {
 
 var ext_version_new;
 function check_update() {
-  //var manifest_new = 'https://gitlab.com/magnolia1234/bypass-paywalls-' + url_loc + '-clean/-/raw/master/manifest.json';
-  var manifest_new = 'https://bitbucket.org/magnolia1234/bypass-paywalls-firefox-clean/raw/master/manifest.json';
-  fetch(manifest_new)
-  .then(response => {
-    if (response.ok) {
-      response.json().then(json => {
-        ext_api.management.getSelf(function (result) {
-          var installType = result.installType;
-          var ext_version_len = (installType === 'development') ? 7 : 5;
-          ext_version_new = json['version'];
-          if (ext_version_new.substring(0, ext_version_len) <= ext_version.substring(0, ext_version_len))
-            ext_version_new = '';
-          ext_api.storage.local.set({
-            ext_version_new: ext_version_new
-          });
-        });
-      })
-    }
-  }).catch(function (err) {
-    false;
-  });
+  // External update check removed for security/privacy
+  // Extension will not check for updates automatically
 }
 
 function site_switch() {
@@ -1253,7 +1232,8 @@ ext_api.runtime.onMessage.addListener(function (message, sender) {
     site_switch();
   }
   if (message.request === 'check_sites_updated') {
-    check_sites_updated();
+    // External update check disabled for security/privacy
+    // check_sites_updated();
   }
   if (message.request === 'popup_show_toggle') {
     ext_api.tabs.query({

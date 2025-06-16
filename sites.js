@@ -441,8 +441,10 @@ var defaultSites = {
   },
   "Financial Times (not Chinese)": {
     domain: "ft.com",
-    block_regex: /cdn\.ampproject\.org\/v\d\/amp-(access|ad|subscriptions)-.+\.js/,
-    useragent: "googlebot"
+    allow_cookies: 1,
+    block_regex: /(cdn\.ampproject\.org\/v\d\/amp-(access|ad|subscriptions)-.+\.js|\.ft\.com\/.+\/(paywall|subscription)\.js)/,
+    useragent: "googlebot",
+    referer: "https://www.google.com/"
   },
   "Financieele Dagblad (fd.nl)": {
     domain: "fd.nl",
