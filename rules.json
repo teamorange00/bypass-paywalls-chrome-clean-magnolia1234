@@ -1,0 +1,236 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||zephr.com/",
+      "resourceTypes": ["script", "xmlhttprequest", "other", "image", "sub_frame"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||theverge.com/zephr/",
+      "resourceTypes": ["script", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "assets.zephr.com/zephr-browser",
+      "resourceTypes": ["script", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 30,
+    "priority": 3,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "User-Agent",
+          "operation": "set",
+          "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+        },
+        {
+          "header": "Referer",
+          "operation": "set",
+          "value": "https://www.google.com/"
+        },
+        { "header": "sec-ch-ua", "operation": "remove" },
+        { "header": "sec-ch-ua-mobile", "operation": "remove" },
+        { "header": "sec-ch-ua-platform", "operation": "remove" },
+        { "header": "sec-ch-ua-full-version", "operation": "remove" },
+        { "header": "sec-ch-ua-full-version-list", "operation": "remove" },
+        { "header": "sec-ch-ua-arch", "operation": "remove" },
+        { "header": "sec-ch-ua-bitness", "operation": "remove" },
+        { "header": "sec-ch-ua-model", "operation": "remove" },
+        { "header": "sec-ch-ua-platform-version", "operation": "remove" },
+        { "header": "sec-ch-ua-wow64", "operation": "remove" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||ft.com/content/",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 31,
+    "priority": 3,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "User-Agent",
+          "operation": "set",
+          "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+        },
+        {
+          "header": "Referer",
+          "operation": "set",
+          "value": "https://www.google.com/"
+        },
+        { "header": "sec-ch-ua", "operation": "remove" },
+        { "header": "sec-ch-ua-mobile", "operation": "remove" },
+        { "header": "sec-ch-ua-platform", "operation": "remove" },
+        { "header": "sec-ch-ua-full-version-list", "operation": "remove" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||amp.ft.com/",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 32,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||pg.ft.com/adapters/dotcom-article",
+      "resourceTypes": ["script", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 33,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "zephrBarriersScripts",
+      "resourceTypes": ["script"]
+    }
+  },
+  {
+    "id": 34,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "regexFilter": "^https://([^/]*\\.)?ft\\.com/.*/(barrier|paywall|subscription|meter|zephr).*\\.js",
+      "resourceTypes": ["script", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 51,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||cdn.cxense.com/",
+      "resourceTypes": ["script", "xmlhttprequest", "other", "image", "sub_frame"],
+      "excludedInitiatorDomains": ["economist.com", "www.economist.com"]
+    }
+  },
+  {
+    "id": 52,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||tinypass.com/",
+      "resourceTypes": ["script", "xmlhttprequest", "other", "sub_frame"],
+      "excludedInitiatorDomains": ["economist.com", "www.economist.com"]
+    }
+  },
+  {
+    "id": 53,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||piano.io/",
+      "resourceTypes": ["script", "xmlhttprequest", "other", "sub_frame"],
+      "excludedInitiatorDomains": ["economist.com", "www.economist.com"]
+    }
+  },
+  {
+    "id": 54,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||wsj.com/asset/piano/",
+      "resourceTypes": ["script", "xmlhttprequest", "other", "sub_frame", "stylesheet", "image"]
+    }
+  },
+  {
+    "id": 56,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||piano.vx.wsj.com/",
+      "resourceTypes": ["script", "xmlhttprequest", "other", "sub_frame", "stylesheet", "image"]
+    }
+  },
+  {
+    "id": 57,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||piano.auth.wsj.com/",
+      "resourceTypes": ["script", "xmlhttprequest", "other", "sub_frame"]
+    }
+  },
+  {
+    "id": 55,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "regexFilter": "^https://cdn\\.ampproject\\.org/v\\d/amp-(access|ad|subscriptions)-.+\\.js",
+      "resourceTypes": ["script", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 60,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "regexFilter": "^https://([^/]*\\.)?telegraph\\.co\\.uk/.*/piano.+\\.js",
+      "resourceTypes": ["script", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 61,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "regexFilter": "^https://assets\\.bwbx\\.io/s\\d/(fence/plug-client|javelin/.+/transporter)/",
+      "resourceTypes": ["script", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 62,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||meter-svc.nytimes.com/meter.js",
+      "resourceTypes": ["script", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 63,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||mwcm.nyt.com/",
+      "resourceTypes": ["script", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 64,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||washingtonpost.com/pwapiv2/article",
+      "resourceTypes": ["script", "xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 65,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "regexFilter": "^https://([^/]*\\.)?newyorker\\.com/verso/static/presenter-articles.+\\.js",
+      "resourceTypes": ["script", "xmlhttprequest", "other"]
+    }
+  }
+]

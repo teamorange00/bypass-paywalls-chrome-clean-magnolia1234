@@ -1,0 +1,9 @@
+node_modules/
+.chrome-*/
+.chrome-test-*/
+.firecrawl/
+package-lock.json
+
+.brave-*/
+_metadata/
+*.png

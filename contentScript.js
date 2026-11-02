@@ -30,7 +30,7 @@ var usa_mng_domains =   ['denverpost.com', 'eastbaytimes.com', 'mercurynews.com'
 var usa_tribune_domains = ['baltimoresun.com', 'chicagotribune.com', 'courant.com', 'dailypress.com', 'mcall.com', 'nydailynews.com', 'orlandosentinel.com', 'pilotonline.com', 'sun-sentinel.com'];
 
 // clean local storage of sites (with an exemption for hold-list)
-var arr_localstorage_hold = ['aachener-nachrichten.de', 'aachener-zeitung.de', 'allgaeuer-zeitung.de', 'augsburger-allgemeine.de', 'barrons.com', 'businessoffashion.com', 'charliehebdo.fr', 'cmjornal.pt', 'corriere.it', 'elespanol.com', 'estadao.com.br', 'fortune.com', 'ilfoglio.it', 'inc42.com', 'kurier.at', 'nknews.org', 'ruhrnachrichten.de', 'scmp.com', 'seekingalpha.com', 'telegraph.co.uk', 'thehindu.com', 'thetimes.co.uk', 'wsj.com'].concat(de_funke_media_domains, es_grupo_vocento_domains, es_unidad_domains, fr_groupe_ebra_domains, fr_groupe_la_depeche_domains, fr_groupe_nice_matin_domains, it_quotidiano_domains, no_nhst_media_domains, usa_hearst_comm_domains);
+var arr_localstorage_hold = ['aachener-nachrichten.de', 'aachener-zeitung.de', 'allgaeuer-zeitung.de', 'augsburger-allgemeine.de', 'barrons.com', 'businessoffashion.com', 'charliehebdo.fr', 'cmjornal.pt', 'corriere.it', 'elespanol.com', 'estadao.com.br', 'fortune.com', 'ft.com', 'ilfoglio.it', 'inc42.com', 'kurier.at', 'nknews.org', 'ruhrnachrichten.de', 'scmp.com', 'seekingalpha.com', 'telegraph.co.uk', 'thehindu.com', 'thetimes.co.uk', 'wsj.com'].concat(de_funke_media_domains, es_grupo_vocento_domains, es_unidad_domains, fr_groupe_ebra_domains, fr_groupe_la_depeche_domains, fr_groupe_nice_matin_domains, it_quotidiano_domains, no_nhst_media_domains, usa_hearst_comm_domains);
 if (!matchDomain(arr_localstorage_hold)) {
   window.localStorage.clear();
 }
@@ -152,73 +152,45 @@ if ((bg2csData !== undefined) && bg2csData.cs_code) {
   }, 1000); // Delay (in milliseconds)
 }
 
-// Financial Times university proxy link rewriting
+// Financial Times university proxy link rewriting (no top-level return — breaks MV3 CS parse)
 if (window.location.hostname.match(/www-ft-com\.(ezphost\.dur\.ac\.uk|ezproxy)|ft-com\.(ezp-prod1\.hul\.harvard\.edu|proxy\.lib\.umich\.edu)/)) {
-  console.log('BPC: FT University proxy detected, setting up link rewriting');
-  
-  // Force reload with Google referrer if we detect paywall and no Google referrer
-  if (!document.referrer.includes('google.com') && (document.querySelector('.subscribe-truncate, [data-trackable="paywall"], .subscription-prompt') || document.body.innerText.includes('Subscribe to unlock'))) {
-    console.log('BPC: Detected paywall without Google referrer, simulating Google search click');
-    
-    // Method 1: Try to navigate via Google search simulation
-    let currentUrl = window.location.href;
-    let searchQuery = encodeURIComponent('site:ft.com ' + document.title);
-    let googleUrl = `https://www.google.com/search?q=${searchQuery}`;
-    
-    // Method 2: Create an invisible iframe that loads Google, then navigate from it
-    let iframe = document.createElement('iframe');
-    iframe.src = googleUrl;
-    iframe.style.display = 'none';
-    iframe.style.width = '1px';
-    iframe.style.height = '1px';
-    document.body.appendChild(iframe);
-    
-    window.setTimeout(function() {
-      // Now navigate to the current page as if coming from the Google iframe
-      window.location.href = currentUrl;
-    }, 1500);
-    
-    return; // Exit early to avoid setting up other functionality
-  }
-  
-  function rewriteFTLinks() {
-    let currentProxyDomain = window.location.hostname;
-    let ftLinks = document.querySelectorAll('a[href*="ft.com"], a[href*="www.ft.com"], a[href^="/"]');
-    
-    for (let link of ftLinks) {
-      let originalHref = link.href;
-      
-      // Handle absolute ft.com links
-      if (originalHref.match(/https?:\/\/(www\.)?ft\.com/)) {
-        let newHref = originalHref.replace(/https?:\/\/(www\.)?ft\.com/, 'https://' + currentProxyDomain);
-        link.href = newHref;
-        console.log('BPC: Rewritten absolute link from', originalHref, 'to', newHref);
-      }
-      // Handle relative links that might escape the proxy
-      else if (link.getAttribute('href') && link.getAttribute('href').startsWith('/') && !originalHref.includes(currentProxyDomain)) {
-        let newHref = 'https://' + currentProxyDomain + link.getAttribute('href');
-        link.href = newHref;
-        console.log('BPC: Rewritten relative link from', originalHref, 'to', newHref);
+  (function () {
+    console.log('BPC: FT University proxy detected, setting up link rewriting');
+
+    function rewriteFTLinks() {
+      let currentProxyDomain = window.location.hostname;
+      let ftLinks = document.querySelectorAll('a[href*="ft.com"], a[href*="www.ft.com"], a[href^="/"]');
+
+      for (let link of ftLinks) {
+        let originalHref = link.href;
+
+        if (originalHref.match(/https?:\/\/(www\.)?ft\.com/)) {
+          let newHref = originalHref.replace(/https?:\/\/(www\.)?ft\.com/, 'https://' + currentProxyDomain);
+          link.href = newHref;
+        } else if (link.getAttribute('href') && link.getAttribute('href').startsWith('/') && !originalHref.includes(currentProxyDomain)) {
+          link.href = 'https://' + currentProxyDomain + link.getAttribute('href');
+        }
       }
     }
-  }
-  
-  // Initial rewrite
-  window.setTimeout(rewriteFTLinks, 1000);
-  
-  // Rewrite links when new content loads
-  let observer = new MutationObserver(function(mutations) {
-    mutations.forEach(function(mutation) {
-      if (mutation.addedNodes.length > 0) {
-        window.setTimeout(rewriteFTLinks, 100);
+
+    window.setTimeout(rewriteFTLinks, 1000);
+
+    let observer = new MutationObserver(function (mutations) {
+      for (let i = 0; i < mutations.length; i++) {
+        if (mutations[i].addedNodes.length > 0)
+          window.setTimeout(rewriteFTLinks, 100);
       }
     });
-  });
-  
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
+
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
+    } else {
+      document.addEventListener('DOMContentLoaded', function () {
+        if (document.body)
+          observer.observe(document.body, { childList: true, subtree: true });
+      });
+    }
+  })();
 }
 
 // Content workarounds/domain
@@ -2419,71 +2391,110 @@ else if (matchDomain('fortune.com')) {
 }
 
 else if (matchDomain('ft.com')) {
+  function renderFtArticle(headline, json_text) {
+    if (!json_text || document.getElementById('bpc_ft_restored'))
+      return false;
+    document.querySelectorAll('#barrier-page, .barrier, .js-barrier, .subscription-prompt, [data-trackable="paywall"], .article__content-sign-up').forEach(el => el.remove());
+    let target = document.querySelector('.article__content, .n-content-body, article, main') || document.body;
+    let article = document.createElement('div');
+    article.id = 'bpc_ft_restored';
+    article.style.cssText = 'white-space:pre-wrap;line-height:1.7;max-width:42rem;margin:1.5rem auto;padding:1rem;font-size:1.05rem;background:#fff;color:#000;position:relative;z-index:2147483646;';
+    if (headline) {
+      let h = document.createElement('h1');
+      h.textContent = headline;
+      article.appendChild(h);
+      document.title = headline + ' | Financial Times';
+    }
+    let body = document.createElement('div');
+    body.innerText = parseHtmlEntities(json_text);
+    article.appendChild(body);
+    target.appendChild(article);
+    return true;
+  }
+
+  function restoreFtFromJson() {
+    let scripts = document.querySelectorAll('script[type="application/ld+json"]');
+    for (let script of scripts) {
+      try {
+        let json = JSON.parse(script.textContent);
+        if (Array.isArray(json))
+          json = json.find(x => x && x.articleBody) || json[0];
+        if (json && json.articleBody)
+          return renderFtArticle(json.headline || '', json.articleBody);
+      } catch (err) {
+        console.log(err);
+      }
+    }
+    return false;
+  }
+
+  function restoreFtFromBackground() {
+    if (document.getElementById('bpc_ft_restored') || window.__bpcFtBgRequested)
+      return;
+    window.__bpcFtBgRequested = true;
+    try {
+      ext_api.runtime.sendMessage({ request: 'ftArticle', url: window.location.href }, function (response) {
+        if (ext_api.runtime.lastError || !response || !response.ok || !response.articleBody)
+          return;
+        renderFtArticle(response.headline || '', response.articleBody);
+      });
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
+  function injectFtLayoutFix() {
+    if (document.getElementById('bpc_ft_layout_css'))
+      return;
+    let style = document.createElement('style');
+    style.id = 'bpc_ft_layout_css';
+    // Do not force display:block on layout rows — that collapses FT's CSS grid into a ~40px column.
+    style.textContent = [
+      '#barrier-page,.barrier,.js-barrier,.subscription-prompt,[data-trackable="paywall"],.article__content-sign-up,.tp-modal,.tp-backdrop',
+      '{display:none!important;visibility:hidden!important;pointer-events:none!important;}',
+      '.n-content-body,.js-article__content-body,.article__content-body,[data-trackable="article-body"]',
+      '{max-height:none!important;overflow:visible!important;-webkit-mask-image:none!important;mask-image:none!important;}',
+      'article,.article__content,main',
+      '{max-width:none!important;width:auto!important;}'
+    ].join('');
+    (document.documentElement || document.head || document).appendChild(style);
+  }
+
+  function cleanFtPaywall() {
+    injectFtLayoutFix();
+    let paywall = document.querySelector('#barrier-page, .barrier, .js-barrier, .js-article-barrier, [data-trackable="paywall"]');
+    let subscription_prompt = document.querySelector('.subscription-prompt, .js-subscription-prompt, .article__content-sign-up');
+    let overlay = document.querySelector('.paywall-overlay');
+    removeDOMElement(paywall, subscription_prompt, overlay);
+
+    // Only lift clip styles on the article body — never rewrite display on layout grid rows.
+    document.querySelectorAll('.n-content-body, .js-article__content-body, .article__content-body, [data-trackable="article-body"]').forEach(function (el) {
+      if (el.style) {
+        el.style.maxHeight = 'none';
+        el.style.overflow = 'visible';
+      }
+    });
+
+    let body = document.querySelector('.n-content-body, .js-article__content-body');
+    let body_len = body ? (body.innerText || '').trim().length : 0;
+    let paywalled = document.title === 'Subscribe to read' ||
+      !!document.querySelector('#barrier-page, .barrier, [data-trackable="paywall"]') ||
+      /Subscribe to unlock this article|Subscribe to unlock|Become an FT subscriber/i.test(document.body ? document.body.innerText.slice(0, 2500) : '');
+    if ((paywalled || body_len < 800) && !restoreFtFromJson())
+      restoreFtFromBackground();
+  }
+
   if (window.location.hostname.startsWith('amp.')) {
     amp_unhide_subscr_section('.ad-container, amp-ad');
   } else {
-    // Check if we're already on a working proxy URL
-    let isProxyUrl = window.location.hostname.includes('ezphost') || 
-                     window.location.hostname.includes('ezp-prod') ||
-                     window.location.hostname.includes('ezproxy');
-    
-    if (!isProxyUrl) {
-      // Check if this is a paywall page
-      let paywall = document.querySelector('#barrier-page, .barrier, [data-trackable="paywall"]');
-      let subscriptionPrompt = document.querySelector('.subscription-prompt');
-      
-      if (paywall || subscriptionPrompt || document.body.textContent.includes('Subscribe to unlock')) {
-        console.log('FT paywall detected, attempting proxy redirect...');
-        
-        // Try redirecting to institutional proxy URLs
-        let currentUrl = window.location.href;
-        let proxyUrls = [
-          currentUrl.replace('www.ft.com', 'www-ft-com.ezphost.dur.ac.uk'),
-          currentUrl.replace('www.ft.com', 'www-ft-com.ezp-prod1.hul.harvard.edu'),
-          currentUrl.replace('www.ft.com', 'ft-com.proxy.lib.umich.edu')
-        ];
-        
-        // Try first proxy URL
-        console.log('Attempting redirect to:', proxyUrls[0]);
-        window.location.href = proxyUrls[0];
-        return;
-      }
-    }
-    
-    // Remove paywall elements if we're on the proxy or if paywall elements exist
-    let paywall = document.querySelector('.barrier, .js-barrier, .js-article-barrier, [data-trackable="paywall"]');
-    let subscription_prompt = document.querySelector('.subscription-prompt, .js-subscription-prompt');
-    let overlay = document.querySelector('.overlay, .paywall-overlay, [data-trackable="overlay"]');
-    let cookie_banner = document.querySelector('.o-banner__outer, .cookie-banner');
-    let ribbon = document.querySelector('.js-article-ribbon, .ribbon');
-    let ads = document.querySelectorAll('.o-ads, .ad-container, [data-trackable="ad"]');
-    
-    removeDOMElement(paywall, subscription_prompt, overlay, cookie_banner, ribbon, ...ads);
-    
-    // Show full article content
-    let article_body = document.querySelector('.article__content-body, .js-article-body, [data-trackable="article-body"]');
-    if (article_body) {
-      article_body.style.maxHeight = 'none';
-      article_body.style.overflow = 'visible';
-      article_body.classList.remove('article--truncated', 'js-article--truncated');
-    }
-    
-    // Remove blur/fade effects
-    let blurred_content = document.querySelectorAll('.article--blurred, .content--blurred, .fade-out');
-    for (let elem of blurred_content) {
-      elem.classList.remove('article--blurred', 'content--blurred', 'fade-out');
-      elem.style.filter = 'none';
-      elem.style.webkitFilter = 'none';
-    }
-    
-    // Clear localStorage that might track article views
-    if (window.localStorage) {
-      Object.keys(localStorage).forEach(key => {
-        if (key.includes('barrier') || key.includes('paywall') || key.includes('subscription') || key.includes('meter')) {
-          localStorage.removeItem(key);
-        }
-      });
-    }
+    cleanFtPaywall();
+    waitDOMElement('#barrier-page, .barrier, .subscription-prompt, [data-trackable="paywall"]', '', function () {
+      cleanFtPaywall();
+    }, true);
+    window.setTimeout(cleanFtPaywall, 500);
+    window.setTimeout(cleanFtPaywall, 1500);
+    window.setTimeout(cleanFtPaywall, 3500);
+    csDoneOnce = true;
   }
 }
 
@@ -3203,6 +3214,86 @@ else if (matchDomain('thepointmag.com')) {
     removeDOMElement(elem);
 }
 
+else if (matchDomain('theverge.com')) {
+  function removeVergePaywall() {
+    let overlays = document.querySelectorAll('#zephr-overlay, #zephr-payment-form, [class*="zephr-message"], [class*="zephr-banner"], [class*="zephr-modal"], [class*="zephr-paywall"], div[data-testid="paywall"]');
+    let paywall_text = Array.from(document.querySelectorAll('h1, h2, h3, button, a')).filter(el =>
+      /Continue reading with a Verge subscription|START YOUR TRIAL|Unlock unlimited access to The Verge/i.test((el.textContent || '').trim())
+    );
+    let paywall_roots = new Set();
+    for (let el of paywall_text) {
+      let root = el.closest('aside, section, dialog, [role="dialog"], form, [class*="paywall"], [class*="zephr-"]');
+      if (root && root.id !== 'zephr-anchor' && !root.querySelector('#zephr-anchor') && root !== document.body && root !== document.documentElement)
+        paywall_roots.add(root);
+    }
+    removeDOMElement(...overlays, ...paywall_roots);
+    let anchor = document.querySelector('#zephr-anchor');
+    if (anchor) {
+      anchor.removeAttribute('hidden');
+      if (anchor.style) {
+        anchor.style.removeProperty('display');
+        anchor.style.removeProperty('visibility');
+        anchor.style.removeProperty('height');
+        anchor.style.removeProperty('overflow');
+      }
+    }
+    if (document.body && document.body.style)
+      document.body.style.removeProperty('overflow');
+  }
+
+  removeVergePaywall();
+  waitDOMElement('#zephr-overlay', 'DIV', function () {
+    removeVergePaywall();
+  }, true);
+
+  function restoreVergeFromJson() {
+    if (document.getElementById('bpc_verge_restored'))
+      return false;
+    let anchor = document.querySelector('#zephr-anchor');
+    let body_len = anchor ? (anchor.innerText || '').trim().length : 0;
+    let paywalled = /Continue reading with a Verge subscription|START YOUR TRIAL/i.test(document.body ? document.body.innerText : '');
+    if (!paywalled && body_len >= 2500)
+      return false;
+    let scripts = document.querySelectorAll('script[type="application/ld+json"]');
+    let json_text = '';
+    for (let script of scripts) {
+      try {
+        let json = JSON.parse(script.textContent);
+        if (Array.isArray(json))
+          json = json.find(x => x && x.articleBody) || json[0];
+        if (json && json.articleBody) {
+          json_text = json.articleBody;
+          break;
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    }
+    if (!json_text)
+      return false;
+    let target = anchor || document.querySelector('article') || document.body;
+    if (!target)
+      return false;
+    removeVergePaywall();
+    let article = document.createElement('div');
+    article.setAttribute('id', 'bpc_verge_restored');
+    article.style.cssText = 'white-space:pre-wrap;line-height:1.7;max-width:42rem;margin:1.5rem auto;padding:0 1rem;font-size:1.05rem;';
+    article.innerText = parseHtmlEntities(json_text);
+    target.appendChild(article);
+    csDoneOnce = true;
+    return true;
+  }
+
+  window.setTimeout(function () {
+    removeVergePaywall();
+    restoreVergeFromJson();
+  }, 800);
+  window.setTimeout(function () {
+    removeVergePaywall();
+    restoreVergeFromJson();
+  }, 2000);
+}
+
 else if (matchDomain('thewrap.com')) {
   let paywall = document.querySelector('.wrappro-paywall');
   if (paywall)
@@ -3402,25 +3493,201 @@ else if (matchDomain('wired.com')) {
 }
 
 else if (matchDomain('wsj.com')) {
+  function wsjParagraphText(node) {
+    if (!node)
+      return '';
+    if (typeof node === 'string')
+      return node;
+    if (Array.isArray(node))
+      return node.map(wsjParagraphText).join('');
+    if (node.content)
+      return wsjParagraphText(node.content);
+    if (node.text)
+      return node.text;
+    if (node.textAndDecorations)
+      return wsjParagraphText(node.textAndDecorations);
+    return '';
+  }
+
+  function wsjBodyFromNextData() {
+    let el = document.getElementById('__NEXT_DATA__');
+    if (!el)
+      return null;
+    try {
+      let pp = JSON.parse(el.textContent).props.pageProps;
+      let headline = (pp.articleData && pp.articleData.headline && pp.articleData.headline.text) || '';
+      let items = (pp.articleData && pp.articleData.flattenedBody) || pp.snippet || [];
+      let paras = [];
+      for (let item of items) {
+        let type = item && (item.__typename || item.type);
+        if (type === 'ParagraphArticleBody' || type === 'paragraph') {
+          let text = wsjParagraphText(item).trim();
+          if (text)
+            paras.push(text);
+        }
+      }
+      return {
+        headline,
+        paras,
+        isSnippetView: !!pp.isSnippetView,
+        unlocked: !!(pp.isServerUnlockedContent || pp.hasBotUnlockHeader || pp.isFreeArticle),
+        wordCount: pp.articleData && pp.articleData.articleTrackingMeta && pp.articleData.articleTrackingMeta.articleWordCount,
+        encrypted: !!(pp.encryptedDataHash && pp.encryptedDataHash.content),
+        encryptedDocumentKey: pp.encryptedDocumentKey || '',
+        encryptedDataHash: pp.encryptedDataHash || null,
+        entitlementsUrl: (pp.endpoints && pp.endpoints.entitlements) || 'https://www.wsj.com/client?legacy=false'
+      };
+    } catch (err) {
+      console.log(err);
+      return null;
+    }
+  }
+
+  function renderWsjArticle(headline, paras) {
+    if (!paras || !paras.length || document.getElementById('bpc_wsj_restored'))
+      return false;
+    let target = document.querySelector('article, main, [class*="ArticleBody"], body');
+    if (!target)
+      return false;
+    let wrap = document.createElement('div');
+    wrap.id = 'bpc_wsj_restored';
+    wrap.style.cssText = 'white-space:pre-wrap;line-height:1.7;max-width:42rem;margin:1.5rem auto;padding:1rem;font-size:1.05rem;background:#fff;color:#000;position:relative;z-index:2147483646;';
+    if (headline) {
+      let h = document.createElement('h1');
+      h.textContent = headline;
+      wrap.appendChild(h);
+      document.title = headline + ' - WSJ';
+    }
+    for (let p of paras) {
+      let el = document.createElement('p');
+      el.textContent = p;
+      wrap.appendChild(el);
+    }
+    target.appendChild(wrap);
+    return true;
+  }
+
+  function cleanWsjPaywallDom() {
+    let nodes = document.querySelectorAll([
+      '.snippet-promotion',
+      '[class*="SnippetOverlay"]',
+      '[class*="SnippetOverlayContainer"]',
+      '[class*="SnippetSubheadline"]',
+      '[class*="SnippetSignIn"]',
+      '[data-testid*="Piano"]',
+      '[data-testid*="Snippet"]',
+      '[data-testid*="piano"]',
+      '.tp-modal',
+      '.tp-backdrop',
+      '.tp-iframe-wrapper',
+      '.tp-container-inner',
+      'div[id^="piano-"]',
+      'div[id^="cx-"]',
+      'div[class*="piano"]',
+      'iframe[src*="piano"]',
+      'iframe[src*="tinypass"]',
+      'iframe[src*="cxense"]',
+      'div[class*="wsj-ad"]',
+      'div.close-btn[role="button"]'
+    ].join(', '));
+    removeDOMElement(...nodes);
+
+    // Inline Piano templates sometimes lack stable class names — drop compact subscribe widgets.
+    document.querySelectorAll('div, section, aside').forEach(function (el) {
+      if (el.id === 'bpc_wsj_restored')
+        return;
+      let text = (el.innerText || '').replace(/\s+/g, ' ').trim();
+      if (text.length < 40 || text.length > 900)
+        return;
+      if (/Continue reading your article with a WSJ|Subscribe to continue reading your article/i.test(text) &&
+          /Subscribe Now|Already a subscriber/i.test(text))
+        el.remove();
+    });
+
+    document.querySelectorAll('body, html, article, main, [class*="ArticleBody"], [class*="article-body"]').forEach(function (el) {
+      el.style.removeProperty('overflow');
+      el.style.removeProperty('height');
+      el.style.maxHeight = 'none';
+      el.style.webkitMaskImage = 'none';
+      el.style.maskImage = 'none';
+      if (el.style) {
+        el.style.setProperty('overflow', 'visible', 'important');
+        el.style.setProperty('max-height', 'none', 'important');
+      }
+    });
+  }
+
+  function wsjIsPaywalled(data) {
+    let text = document.body ? document.body.innerText.slice(0, 3500) : '';
+    return !!(
+      document.querySelector('.snippet-promotion, [class*="SnippetOverlay"], .tp-modal') ||
+      /Subscribe to continue reading|Continue reading your article with a WSJ/i.test(text) ||
+      (data && data.isSnippetView && !data.unlocked) ||
+      (data && data.paras && data.paras.length && data.wordCount && data.paras.join(' ').split(/\s+/).length < Math.min(200, data.wordCount * 0.4))
+    );
+  }
+
+  function restoreWsjFromBackground(data) {
+    // No SW /client unlock probes — local teaser only.
+    cleanWsjPaywallDom();
+    if (data && data.paras && data.paras.length)
+      renderWsjArticle(data.headline || '', data.paras);
+  }
+
   let url = window.location.href;
-  if (location.href.includes('/articles/')) {
+  if (location.href.includes('/articles/') || location.pathname.split('/').length > 2) {
     let close_button = document.querySelector('div.close-btn[role="button"]');
     if (close_button)
       close_button.click();
   }
-  let wsj_ads = document.querySelectorAll('div[class*="wsj-ad"]');
-  removeDOMElement(...wsj_ads);
+  cleanWsjPaywallDom();
+
   if (url.includes('/amp/')) {
     let masthead_link = document.querySelector('div.masthead > a[href*="/articles/"]');
     if (masthead_link)
       masthead_link.href = 'https://www.wsj.com';
-    amp_unhide_subscr_section();
+    amp_unhide_subscr_section('.wsj-ad, amp-ad');
   } else {
-    let snippet = document.querySelector('.snippet-promotion');
+    let data = wsjBodyFromNextData();
+    if (data && data.unlocked && data.paras.length >= 3)
+      renderWsjArticle(data.headline, data.paras);
+
+    let legacySnippet = document.querySelector('.snippet-promotion');
     let wsj_pro = document.querySelector('meta[name="page.site"][content="wsjpro"]');
-    if (snippet || wsj_pro) {
-      removeDOMElement(snippet, wsj_pro);
-      window.location.href = url.replace('wsj.com', 'wsj.com/amp');
+    let paywalled = wsjIsPaywalled(data);
+
+    let ampTried = false;
+    try { ampTried = sessionStorage.getItem('bpc_wsj_amp_tried') === location.pathname; } catch (e) {}
+    let didAmpRedirect = false;
+    // Only classic /articles/ + legacy markers — modern Piano pages keep encrypted body on AMP too.
+    if ((legacySnippet || wsj_pro) && /\/articles\//.test(location.pathname) && !ampTried && !/\/amp\//.test(location.pathname)) {
+      try { sessionStorage.setItem('bpc_wsj_amp_tried', location.pathname); } catch (e) {}
+      removeDOMElement(legacySnippet, wsj_pro);
+      didAmpRedirect = true;
+      window.location.href = url.replace('wsj.com', 'wsj.com/amp').split('#')[0];
+    }
+
+    if (!didAmpRedirect) {
+      if (paywalled && !(data && data.unlocked && data.paras.length >= 3))
+        restoreWsjFromBackground(data);
+
+      waitDOMElement('.snippet-promotion, [class*="SnippetOverlay"], .tp-modal, .tp-container-inner', '', function () {
+        cleanWsjPaywallDom();
+        let again = wsjBodyFromNextData();
+        if (again && again.unlocked && again.paras.length >= 3)
+          renderWsjArticle(again.headline, again.paras);
+        else if (wsjIsPaywalled(again))
+          restoreWsjFromBackground(again);
+      }, true);
+
+      // Piano injects late / re-adds nodes; keep scrubbing.
+      let sweeps = 0;
+      let sweepId = window.setInterval(function () {
+        sweeps += 1;
+        cleanWsjPaywallDom();
+        if (sweeps >= 30)
+          window.clearInterval(sweepId);
+      }, 1000);
     }
   }
 }
@@ -3484,6 +3751,9 @@ function waitDOMElement(selector, tagName = '', callback, multiple = false) {
   new window.MutationObserver(function (mutations) {
     for (let mutation of mutations) {
       for (let node of mutation.addedNodes) {
+        // Text/comment nodes have no .matches()
+        if (!node || node.nodeType !== 1 || typeof node.matches !== 'function')
+          continue;
         if (!tagName || (node.tagName === tagName)) {
           if (node.matches(selector)) {
             callback(node);

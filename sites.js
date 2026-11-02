@@ -442,9 +442,7 @@ var defaultSites = {
   "Financial Times (not Chinese)": {
     domain: "ft.com",
     allow_cookies: 1,
-    block_regex: /(cdn\.ampproject\.org\/v\d\/amp-(access|ad|subscriptions)-.+\.js|\.ft\.com\/.+\/(paywall|subscription)\.js)/,
-    useragent: "googlebot",
-    referer: "https://www.google.com/"
+    block_regex: /(cdn\.ampproject\.org\/v\d\/amp-(access|ad|subscriptions)-.+\.js|\.ft\.com\/.+\/(barrier|paywall|subscription|meter|zephr)\.js|zephrBarriersScripts|pg\.ft\.com\/adapters\/dotcom-article|financial-times-o-private-foundation)/
   },
   "Financieele Dagblad (fd.nl)": {
     domain: "fd.nl",
@@ -1422,6 +1420,7 @@ var defaultSites = {
   "The Atlantic": {
     domain: "theatlantic.com",
     block_regex: /cdn\.ampproject\.org\/v\d\/amp-(access|(sticky-)?ad|subscriptions)-.+\.js/,
+    // Free-article meter: server Set-Cookie articleViews=[id,...]. Cleared in SW + MAIN cookie trap.
     remove_cookies_select_drop: ["articleViews"]
   },
   "The Australian Financial Review": {
@@ -1470,7 +1469,8 @@ var defaultSites = {
   },
   "The Economist": {
     domain: "economist.com",
-    block_regex: /(\.tinypass\.com\/cdn\.ampproject\.org\/v\d\/amp-(access|ad)-.+\.js)/
+    // MV3: strip article regwall in content script. Don't hard-block Piano (stalls site boot).
+    block_regex: /cdn\.ampproject\.org\/v\d\/amp-(access|ad|subscriptions)-.+\.js/
   },
   "The Globe and Mail": {
     domain: "theglobeandmail.com",
@@ -1602,10 +1602,17 @@ var defaultSites = {
   "The Times": {
     domain: "thetimes.co.uk",
     allow_cookies: 1,
-    useragent: "googlebot"
+    // MV3: Zephr UI strip only. Full body not in HTML for non-subscribers.
+    // Do NOT use Googlebot (IP bans). Blocking Zephr does not unlock SSR teaser.
+    block_regex: /(\.zephr\.com\/|\.tinypass\.com\/)/
   },
   "The Times Literary Supplement": {
     domain: "the-tls.co.uk"
+  },
+  "The Verge": {
+    domain: "theverge.com",
+    allow_cookies: 1,
+    block_regex: /\.zephr\.com\/zephr-browser\/.+\/zephr-browser\.umd\.js/
   },
   "The Toronto Star (+ local TorStar sites)": {
     domain: "###_ca_torstar",
@@ -1623,9 +1630,10 @@ var defaultSites = {
   },
   "The Wall Street Journal": {
     domain: "wsj.com",
-    block_regex: /(cdn\.cxense\.com\/|cdn\.ampproject\.org\/v\d\/amp-(access|ad|subscriptions)-.+\.js)/,
-    remove_cookies_select_hold: ["wsjregion", "ResponsiveConditional_initialBreakpoint"],
-    useragent: "googlebot"
+    // No Googlebot / Google referer / /client unlock probes (Akamai IP bans).
+    // Extension only blocks Piano/Cxense and strips the overlay; teaser text only.
+    block_regex: /(cdn\.cxense\.com\/|\.tinypass\.com\/|\.piano\.io\/|\/asset\/piano\/|cdn\.ampproject\.org\/v\d\/amp-(access|ad|subscriptions)-.+\.js)/,
+    remove_cookies_select_hold: ["wsjregion", "ResponsiveConditional_initialBreakpoint"]
   },
   "The Washington Post": {
     domain: "washingtonpost.com",

@@ -1,0 +1,33 @@
+{
+  "keys": [
+    "id",
+    "isTnfCompatible",
+    "layout",
+    "hasMeter",
+    "url",
+    "dateModified",
+    "primaryCategory",
+    "__typename",
+    "notFound",
+    "urqlState",
+    "urqlClient"
+  ],
+  "longs": [
+    {
+      "path": "urqlState.2711304210.data",
+      "len": 19313,
+      "head": "{\"article\":{\"__typename\":\"BlogArticle\",\"id\":\"BlogArticle:687986\",\"authors\":[{\"url\":\"https://www.theatlantic.com/author/n",
+      "hasP": false,
+      "hasTaylor": true,
+      "hasDiarrhea": true
+    },
+    {
+      "path": "urqlState.2308547230.data",
+      "len": 307,
+      "head": "{\"article\":{\"id\":\"BlogArticle:687986\",\"isTnfCompatible\":true,\"layout\":\"standard\",\"hasMeter\":true,\"url\":\"https://www.thea",
+      "hasP": false,
+      "hasTaylor": false,
+      "hasDiarrhea": false
+    }
+  ]
+}
