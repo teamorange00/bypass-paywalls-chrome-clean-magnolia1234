@@ -61,7 +61,12 @@
     "*://*.theatlantic.com/*",
     "*://theatlantic.com/*",
     "*://*.newyorker.com/*",
-    "*://newyorker.com/*"
+    "*://newyorker.com/*",
+    "*://archive.ph/*",
+    "*://*.archive.ph/*",
+    "*://archive.today/*",
+    "*://*.archive.today/*",
+    "*://web.archive.org/*"
   ],
   "declarative_net_request": {
     "rule_resources": [

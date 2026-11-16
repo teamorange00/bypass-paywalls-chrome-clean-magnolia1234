@@ -2391,6 +2391,25 @@ else if (matchDomain('fortune.com')) {
 }
 
 else if (matchDomain('ft.com')) {
+  function unlockFtScroll() {
+    // Sourcepoint consent locks the page until a choice is made:
+    // html.sp-message-open -> body{position:fixed;overflow:hidden}.
+    // Unlock scrolling (consent banner itself is left for the user).
+    let html = document.documentElement;
+    if (html && html.classList.contains('sp-message-open'))
+      html.classList.remove('sp-message-open');
+    let body = document.body;
+    if (body && body.style) {
+      body.style.setProperty('position', 'static', 'important');
+      body.style.setProperty('overflow', 'visible', 'important');
+      body.style.setProperty('overflow-y', 'auto', 'important');
+    }
+    if (html && html.style) {
+      html.style.setProperty('overflow-y', 'auto', 'important');
+      html.style.setProperty('height', 'auto', 'important');
+    }
+  }
+
   function renderFtArticle(headline, json_text) {
     if (!json_text || document.getElementById('bpc_ft_restored'))
       return false;
@@ -2408,7 +2427,13 @@ else if (matchDomain('ft.com')) {
     let body = document.createElement('div');
     body.innerText = parseHtmlEntities(json_text);
     article.appendChild(body);
-    target.appendChild(article);
+    // Prepend: appending buried the copy below ~2800px of subscribe-shell
+    // modules where (with the scroll lock) readers never reached it.
+    if (target !== document.body && target.firstChild)
+      target.insertBefore(article, target.firstChild);
+    else
+      target.appendChild(article);
+    unlockFtScroll();
     return true;
   }
 
@@ -2455,13 +2480,19 @@ else if (matchDomain('ft.com')) {
       '.n-content-body,.js-article__content-body,.article__content-body,[data-trackable="article-body"]',
       '{max-height:none!important;overflow:visible!important;-webkit-mask-image:none!important;mask-image:none!important;}',
       'article,.article__content,main',
-      '{max-width:none!important;width:auto!important;}'
+      '{max-width:none!important;width:auto!important;}',
+      // Sourcepoint scroll lock (see unlockFtScroll)
+      'html.sp-message-open',
+      '{height:auto!important;width:auto!important;}',
+      'html.sp-message-open body',
+      '{position:static!important;overflow:visible!important;overflow-y:auto!important;}'
     ].join('');
     (document.documentElement || document.head || document).appendChild(style);
   }
 
   function cleanFtPaywall() {
     injectFtLayoutFix();
+    unlockFtScroll();
     let paywall = document.querySelector('#barrier-page, .barrier, .js-barrier, .js-article-barrier, [data-trackable="paywall"]');
     let subscription_prompt = document.querySelector('.subscription-prompt, .js-subscription-prompt, .article__content-sign-up');
     let overlay = document.querySelector('.paywall-overlay');
@@ -2494,6 +2525,15 @@ else if (matchDomain('ft.com')) {
     window.setTimeout(cleanFtPaywall, 500);
     window.setTimeout(cleanFtPaywall, 1500);
     window.setTimeout(cleanFtPaywall, 3500);
+    // Sourcepoint can (re)apply its scroll lock seconds later, and the
+    // archive fallback may not restore until ~10s — keep unlocking.
+    let ftUnlockTicks = 0;
+    let ftUnlockTimer = window.setInterval(function () {
+      ftUnlockTicks++;
+      unlockFtScroll();
+      if (ftUnlockTicks >= 30)
+        window.clearInterval(ftUnlockTimer);
+    }, 2000);
     csDoneOnce = true;
   }
 }

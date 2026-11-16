@@ -88,35 +88,173 @@ function isWsjArticleUrl(url) {
   }
 }
 
-async function fetchFtArticle(url) {
-  const resp = await fetch(url, {
-    redirect: 'follow',
-    credentials: 'omit',
-    headers: {
-      'Accept': 'text/html,application/xhtml+xml',
-    },
+function decodeEntities(text) {
+  const named = {
+    amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+    rsquo: '\u2019', lsquo: '\u2018', rdquo: '\u201d', ldquo: '\u201c',
+    mdash: '\u2014', ndash: '\u2013', hellip: '\u2026', copy: '\u00a9',
+  };
+  return String(text).replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, ent) => {
+    if (ent[0] === '#') {
+      const code = ent[1] === 'x' || ent[1] === 'X'
+        ? parseInt(ent.slice(2), 16)
+        : parseInt(ent.slice(1), 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : m;
+    }
+    const v = named[ent.toLowerCase()];
+    return v !== undefined ? v : m;
   });
-  if (!resp.ok)
-    throw new Error('FT fetch failed: ' + resp.status);
-  const html = await resp.text();
-  const blocks = [...html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)];
-  let headline = '';
-  let articleBody = '';
-  for (const block of blocks) {
+}
+
+// archive.today snapshots normalize the FT body to
+// <article id="article-body"><div>para</div>...</article> regardless of
+// FT's own markup — extract and flatten that to plain text.
+function extractArchiveArticleBody(html) {
+  const start = html.indexOf('<article id="article-body"');
+  if (start < 0)
+    return '';
+  const end = html.indexOf('</article>', start);
+  if (end < 0)
+    return '';
+  const inner = html.slice(start, end);
+  const text = inner
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(div|p|li|h\d)>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '');
+  const paras = decodeEntities(text)
+    .split(/\n\s*\n/)
+    .map((p) => p.replace(/\s+/g, ' ').trim())
+    .filter((p) => p.length > 40 && !/Subscribe to (read|unlock)/i.test(p));
+  return paras.join('\n\n');
+}
+
+function canonicalFtUrl(url) {
+  try {
+    const u = new URL(url);
+    const m = u.pathname.match(/\/content\/[a-f0-9-]+/i);
+    if (m)
+      return u.origin + m[0];
+  } catch {
+    // fall through
+  }
+  return url;
+}
+
+async function fetchFtFromWayback(url) {
+  try {
+    const avail = await fetch(
+      'https://archive.org/wayback/available?url=' + encodeURIComponent(url),
+      { credentials: 'omit' }
+    );
+    if (!avail.ok)
+      return { articleBody: '', headline: '' };
+    const data = await avail.json();
+    const closest = data && data.archived_snapshots && data.archived_snapshots.closest;
+    if (!closest || !closest.available || !closest.url)
+      return { articleBody: '', headline: '' };
+    const resp = await fetch(closest.url, { credentials: 'omit', redirect: 'follow' });
+    if (!resp.ok)
+      return { articleBody: '', headline: '' };
+    const html = await resp.text();
+    // Wayback captures keep FT's original ld+json when the crawler was
+    // served the full page; otherwise the body may be in article markup.
+    const blocks = [...html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)];
+    for (const block of blocks) {
+      try {
+        let json = JSON.parse(block[1]);
+        if (Array.isArray(json))
+          json = json.find((x) => x && x.articleBody) || json[0];
+        if (json && json.articleBody && json.articleBody.length > 1200)
+          return { articleBody: json.articleBody, headline: json.headline || '' };
+      } catch {
+        // keep looking
+      }
+    }
+    const fromMarkup = extractArchiveArticleBody(html);
+    return { articleBody: fromMarkup, headline: '' };
+  } catch {
+    return { articleBody: '', headline: '' };
+  }
+}
+
+async function fetchFtFromArchive(rawUrl) {
+  const url = canonicalFtUrl(rawUrl);
+  // archive.today captures are fetched once (often from a browser/region
+  // FT served the full page to) and then served statically — FT's live
+  // barrier never re-evaluates. Try the main mirrors in order.
+  // NOTE: lookup must use the canonical /content/<uuid> URL — archive
+  // indexes captures without tracking query strings (srnd, shareType...).
+  for (const base of ['https://archive.ph/newest/', 'https://archive.today/newest/']) {
     try {
-      let json = JSON.parse(block[1]);
-      if (Array.isArray(json))
-        json = json.find((x) => x && x.articleBody) || json[0];
-      if (json && json.articleBody) {
-        headline = json.headline || '';
-        articleBody = json.articleBody;
-        break;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 45000);
+      const resp = await fetch(base + url, {
+        redirect: 'follow',
+        credentials: 'omit',
+        signal: ctrl.signal,
+        headers: { Accept: 'text/html,application/xhtml+xml' },
+      });
+      clearTimeout(timer);
+      if (!resp.ok)
+        continue;
+      const html = await resp.text();
+      const articleBody = extractArchiveArticleBody(html);
+      if (articleBody.length > 1200) {
+        const title = (html.match(/<title>([^<]+)/) || [])[1] || '';
+        return { articleBody, headline: decodeEntities(title).trim(), source: 'archive' };
       }
     } catch {
-      // keep looking
+      // try next mirror
     }
   }
-  return { headline, articleBody, htmlLength: html.length };
+  const wayback = await fetchFtFromWayback(url);
+  if (wayback.articleBody && wayback.articleBody.length > 1200)
+    return { articleBody: wayback.articleBody, headline: wayback.headline, source: 'wayback' };
+  return { articleBody: '', headline: '', source: 'archive' };
+}
+
+async function fetchFtArticle(url) {
+  let headline = '';
+  let htmlLength = 0;
+  try {
+    const resp = await fetch(url, {
+      redirect: 'follow',
+      credentials: 'omit',
+      headers: {
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+    });
+    if (resp.ok) {
+      const html = await resp.text();
+      htmlLength = html.length;
+      const blocks = [...html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)];
+      for (const block of blocks) {
+        try {
+          let json = JSON.parse(block[1]);
+          if (Array.isArray(json))
+            json = json.find((x) => x && x.articleBody) || json[0];
+          if (json && json.articleBody) {
+            return { headline: json.headline || '', articleBody: json.articleBody, htmlLength, source: 'live' };
+          }
+          if (json && json.headline && !headline)
+            headline = json.headline;
+        } catch {
+          // keep looking
+        }
+      }
+    }
+  } catch {
+    // fall through to archive
+  }
+  // Live FT returned the subscribe shell (premium articles): the body was
+  // never sent. Fall back to an archive.today capture of the same URL.
+  const archived = await fetchFtFromArchive(url);
+  return {
+    headline: headline || archived.headline || '',
+    articleBody: archived.articleBody,
+    htmlLength,
+    source: archived.articleBody ? archived.source : 'none',
+  };
 }
 
 /**

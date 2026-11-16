@@ -18,6 +18,7 @@
     'body[data-paywall-overlay-status] > #fortress-container-root',
     '.tp-modal',
     '.tp-backdrop',
+    '[class*="articleBlur"]',
     '[id^="sp_message_container"]',
     'iframe[id^="sp_message_iframe"]'
   ].join(',') +
@@ -28,6 +29,11 @@
     '{pointer-events:auto!important;overflow:auto!important;overflow-y:auto!important;touch-action:auto!important;}' +
     'body,article,.body-copy,.body-copy-v2,.body-content,[class*="body-content"],main' +
     '{overflow:visible!important;max-height:none!important;-webkit-filter:none!important;filter:none!important;}' +
+    // Repeat-visit lock: fortress adds _leaderboardParallaxWrapper_* to the
+    // page wrapper (height:100vh; overflow-y:hidden), clipping the whole
+    // article to one viewport so the wheel stops after ~280px. Unlock it.
+    '[class*="leaderboardParallaxWrapper"],[class*="parallaxWrapper"]' +
+    '{overflow:visible!important;overflow-y:visible!important;height:auto!important;max-height:none!important;}' +
     '.blur,[class*="nearly-transparent-text-blur"],.shimmering-text' +
     '{filter:none!important;-webkit-filter:none!important;opacity:1!important;}';
 
@@ -40,25 +46,64 @@
     (document.documentElement || document.head || document).appendChild(style);
   }
 
+  function stripScrollLock(el) {
+    if (!el || typeof el.className !== 'string' || !el.className)
+      return;
+    // Fortress/Piano locks live on <html> as well as <body>:
+    // _stopScroll_xxx / _restrictScroll_xxx / sp-message-open (Sourcepoint)
+    if (!/stopScroll|restrictScroll|sp-message-open/i.test(el.className))
+      return;
+    el.className = el.className
+      .split(/\s+/)
+      .filter(function (c) {
+        return c && !/stopScroll|restrictScroll|sp-message-open/i.test(c);
+      })
+      .join(' ');
+  }
+
+  function setImp(el, prop, value) {
+    if (el.style.getPropertyValue(prop) !== value)
+      el.style.setProperty(prop, value, 'important');
+  }
+
   function unlockPage() {
     var html = document.documentElement;
     var body = document.body;
     if (html) {
       html.style.setProperty('pointer-events', 'auto', 'important');
       html.style.setProperty('overflow', 'auto', 'important');
+      html.style.setProperty('overflow-y', 'auto', 'important');
+      stripScrollLock(html);
     }
     if (body) {
       body.style.setProperty('pointer-events', 'auto', 'important');
       body.style.setProperty('overflow', 'auto', 'important');
       body.style.setProperty('overflow-y', 'auto', 'important');
       body.removeAttribute('data-paywall-overlay-status');
-      // Piano/fortress scroll lock: _stopScroll_xxxxx
-      if (body.className && /stopScroll/i.test(body.className)) {
-        body.className = body.className
-          .split(/\s+/)
-          .filter(function (c) { return c && !/stopScroll/i.test(c); })
-          .join(' ');
+      stripScrollLock(body);
+    }
+    // Scroll locks can land on any wrapper, not just html/body
+    // (e.g. _restrictScroll_* on a div). Strip them wherever they appear.
+    document
+      .querySelectorAll('[class*="restrictScroll"], [class*="stopScroll"]')
+      .forEach(function (el) { stripScrollLock(el); });
+    // Generic clipper unlock: any ancestor of the article that clips its
+    // content (scrollHeight >> clientHeight, overflow hidden) is a paywall
+    // scroll lock — the repeat-visit _leaderboardParallaxWrapper_* case.
+    // Only ancestors are touched, so carousels/widgets inside the article
+    // are left alone.
+    var anchor = document.querySelector('article, main, #bpc_bbg_restored');
+    var node = anchor ? anchor.parentElement : null;
+    var guard = 0;
+    while (node && node !== body && node !== html && guard < 20) {
+      guard += 1;
+      if (node.scrollHeight > node.clientHeight + 50) {
+        setImp(node, 'overflow', 'visible');
+        setImp(node, 'overflow-y', 'visible');
+        setImp(node, 'height', 'auto');
+        setImp(node, 'max-height', 'none');
       }
+      node = node.parentElement;
     }
   }
 
@@ -127,17 +172,20 @@
       var block = blocks[i];
       if (!block || typeof block !== 'object') continue;
       var type = String(block.type || '').toLowerCase();
-      if (type && !/paragraph|text|p\b|quote|heading|dek/i.test(type) && type !== 'paragraph') {
-        var maybe = inlineText(block).replace(/\s+/g, ' ').trim();
-        if (maybe.length > 60 && !/^https?:\/\//i.test(maybe))
-          paras.push(maybe);
+      // Whitelist prose only. story.body also carries inline-newsletter,
+      // tabularData (related-links headline soup), media and ad blocks —
+      // inlining those produced concatenated, unspaced "paragraphs".
+      if (type && !/^(paragraph|blockquote|quote|heading|subheading|dek|text|p)$/.test(type))
         continue;
-      }
       var text = inlineText(block).replace(/\s+/g, ' ').trim();
-      if (text.length > 40)
+      if (text.length > 40 && paras[paras.length - 1] !== text)
         paras.push(text);
     }
     return paras;
+  }
+
+  function normText(s) {
+    return (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
   }
 
   function readNextStory() {
@@ -171,29 +219,62 @@
     }
   }
 
+  var restoreAttempts = 0;
+
   function renderRestored(data) {
     if (!data || document.getElementById('bpc_bbg_restored'))
-      return;
-    var target = document.querySelector(
-      'div.body-copy-v2, div.body-copy, div.body-content, article, main, body'
+      return false;
+    // Wait for the article shell. Appending to <body> at document_start
+    // (previous behaviour) stranded the restored copy outside the article
+    // grid, above/behind unrelated modules. Only fall back to <body>
+    // after ~10s of ticks with no article/main in the DOM.
+    var article = document.querySelector(
+      'article[class*="articleLayout"], main article, article, main'
     );
-    if (!target) return;
+    restoreAttempts += 1;
+    if (!article && restoreAttempts < 25)
+      return false;
+    // Inserting/removing nodes inside the React (#__next) tree before
+    // hydration finishes triggers React #418/#423 recovery, which can
+    // discard the restored node. Wait for load; fortress/blur removal
+    // above already makes the wait invisible to the reader.
+    if (article && document.readyState !== 'complete' && restoreAttempts < 40)
+      return false;
+    var target = article || document.body;
+    if (!target) return false;
+    var inArticle = !!article;
+
+    // If the page already rendered a full native body, do not duplicate it.
+    if (inArticle) {
+      var nativeParas = target.querySelectorAll(
+        'p[class*="ArticleBodyText"], .body-copy p, .body-copy-v2 p'
+      );
+      if (nativeParas.length > 6 && !document.querySelector('[class*="articleBlur"]'))
+        return true; // nothing to restore; stop retrying
+    }
 
     var wrap = document.createElement('div');
     wrap.id = 'bpc_bbg_restored';
     wrap.className = 'body-copy art_done';
     wrap.style.cssText =
-      'line-height:1.7;max-width:42rem;margin:1.5rem auto;padding:1.25rem;font-size:1.05rem;background:#fff;color:#111;position:relative;z-index:2147483646;pointer-events:auto;';
+      'line-height:1.7;max-width:42rem;width:100%;box-sizing:border-box;margin:1.5rem auto;padding:1.25rem;font-size:1.05rem;background:#fff;color:#111;position:relative;z-index:2147483646;pointer-events:auto;grid-column:1/-1;justify-self:center;';
 
+    // The in-page <h1> already shows the headline inside an article;
+    // repeating it (and a summary identical to paragraph 1) read as
+    // duplicated content. Only add them for the bare-<body> fallback.
     if (data.headline) {
-      var h = document.createElement('h1');
-      h.textContent = data.headline;
-      wrap.appendChild(h);
       document.title = data.headline + ' - Bloomberg';
+      if (!inArticle) {
+        var h = document.createElement('h1');
+        h.textContent = data.headline;
+        wrap.appendChild(h);
+      }
     }
-    if (data.summary) {
+    var firstPara = data.paras && data.paras.length ? data.paras[0] : '';
+    if (data.summary && normText(data.summary) !== normText(firstPara)) {
       var s = document.createElement('p');
       s.style.fontStyle = 'italic';
+      s.style.margin = '0 0 1em';
       s.textContent = data.summary;
       wrap.appendChild(s);
     }
@@ -203,18 +284,44 @@
     } else if (data.paras && data.paras.length) {
       for (var i = 0; i < data.paras.length; i++) {
         var p = document.createElement('p');
+        p.style.margin = '0 0 1em';
         p.textContent = data.paras[i];
         wrap.appendChild(p);
       }
     } else {
-      return;
+      return false;
     }
 
-    target.appendChild(wrap);
-    document.querySelectorAll('div.body-content[class*="teaser-content_"]').forEach(function (el) {
-      try { el.remove(); } catch (e) {}
-    });
+    // Replace the native teaser in place. Its 1-2 paragraphs duplicate
+    // the restored opening, and its articleBlur overlay fades them out —
+    // leaving it in the flow made the article start twice.
+    var nativeBody = inArticle
+      ? target.querySelector('div.body-content, div.body-copy-v2, div.body-copy')
+      : null;
+
+    // Remove any remaining blurred teaser fragments outside nativeBody.
+    document
+      .querySelectorAll('[class*="articleBlur"], div.body-content[class*="teaser-content_"], [class*="teaser-content"]')
+      .forEach(function (el) {
+        if (nativeBody && nativeBody.contains(el)) return;
+        try { el.remove(); } catch (e) {}
+      });
+
+    if (nativeBody && nativeBody.parentNode) {
+      nativeBody.parentNode.insertBefore(wrap, nativeBody);
+      try { nativeBody.remove(); } catch (e) {}
+    } else {
+      // No native body container: sit just before "More From Bloomberg".
+      var moreFrom = inArticle
+        ? target.querySelector('[class*="gridLayout_full"], [class*="MoreFromBloomberg"]')
+        : null;
+      if (moreFrom && moreFrom.parentNode)
+        moreFrom.parentNode.insertBefore(wrap, moreFrom);
+      else
+        target.appendChild(wrap);
+    }
     unlockPage();
+    return true;
   }
 
   function restore() {

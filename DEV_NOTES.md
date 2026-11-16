@@ -149,6 +149,35 @@ Check for success: `<title>` is the headline (not “Subscribe to read”) and H
 
 Note: FT responses are flaky/rate-limited. Re-test the same UA twice before concluding a method is dead.
 
+### Update Nov 2026 — archive fallback for hard shells
+
+Live FT now returns the `Subscribe to read` barrier app (no `articleBody`
+anywhere) for all subscriber/premium articles, for every UA/referer
+combination tried (Firefox DNR, consistent CDP Firefox/Googlebot/social-bot
+UAs, in-page fetch). The body is never sent, so DOM tricks cannot work.
+What does work, in `background-sw.js` `fetchFtArticle`:
+
+1. Live fetch → `ld+json` `articleBody` (free/registered tier articles).
+2. **archive.today**: fetch `https://archive.ph/newest/<canonical-url>`
+   (canonical = `origin + /content/<uuid>` — archive indexes captures
+   without tracking query strings, so a raw `location.href` lookup misses).
+   Captures are served statically; the snapshot normalizes the body to
+   `<article id="article-body"><div>…</div></article>`, which
+   `extractArchiveArticleBody` flattens to text. Front-page FT articles
+   are usually captured within hours (forensically, the Nov 16 Jensen
+   Huang capture came from a UK residential Chrome with the full page —
+   FT served *that* request context the full variant, then archive froze
+   it). Wayback is tried last (its crawler often captures only the shell).
+3. Content script restores via the existing `ftArticle` message, prepends
+   `#bpc_ft_restored` into `main`, and unlocks the Sourcepoint scroll
+   lock (`html.sp-message-open` → `body{position:fixed;overflow:hidden}`;
+   without this the page cannot scroll at all, same bug as Bloomberg).
+
+Tests: `node test-ft.mjs` (homepage → article), `node test-ft-archive.mjs
+[url]` (hard-shell article, ~10–20s restore). No snapshot yet for a
+just-published piece is the remaining gap — archive capture submission
+was tested and does not complete fast enough to poll for.
+
 ### Breakage checklist
 
 1. Without extension: confirm hard paywall still appears.

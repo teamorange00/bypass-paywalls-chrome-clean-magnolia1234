@@ -112,10 +112,13 @@ async function run(withExtension) {
     await page.goto(linkInfo.href, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await new Promise((r) => setTimeout(r, 5000));
     await dismissCookies(page);
-    // Give content script / SW restore a moment after paywall paint
-    await new Promise((r) => setTimeout(r, 2000));
-
-    const signals = await pageSignals(page);
+    // Archive fallback (subscribe-shell articles) can take ~10-20s:
+    // poll until the restored copy lands or we time out.
+    let signals = await pageSignals(page);
+    for (let i = 0; i < 8 && !(signals.restoredFallback || signals.articleBodyLength > 2000); i++) {
+      await new Promise((r) => setTimeout(r, 4000));
+      signals = await pageSignals(page);
+    }
     const shot = path.join(
       __dirname,
       '.firecrawl',
@@ -139,7 +142,7 @@ analyze('WITH_EXTENSION', withExt);
 const bypassed =
   withExt.signals.hasContentPath &&
   !withExt.signals.hasBarrier &&
-  withExt.signals.hasArticlePhrase &&
+  (withExt.signals.restoredFallback || withExt.signals.articleBodyLength > 2000) &&
   withExt.signals.articleBodyLength > 1200 &&
   !/Just a moment|Security Verification|Subscribe to read/i.test(withExt.signals.title);
 
